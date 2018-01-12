@@ -164,17 +164,29 @@
     recurse: true
   register: images
 
-# Delete any images with the same name as the one we are about to upload.
-- name: Deleting the existing images in OpenStack
-  shell: "{{ openstack }} image delete ocp-{{ ocp_major_minor }}-{{ item }}"
-  with_items: "{{ [ 'atomic', 'rhel' ] }}"
-  # Do not fail if here is no image to delete.
-  ignore_errors: true
+# Set a variable to the paths of the files found.
+- name: Creating a list variable to the paths of the files found
+  set_fact:
+    paths: "{{ paths|default([]) + [ item['path'] ] }}"
+  with_items: "{{ images['files'] }}"
+
+# List all the images with ocp in the name.
+- name: Listing all the OCP images in OpenStack
+  # Have to use grep becuase image list does not support the --name flag.
+  shell: "{{ openstack }} image list --format value -c ID -c Name | grep -i -ocp-"
+  register: images_id_name
+
+# Delete any images (by ID) that have ocp in the name.
+- name: Deleting the existing OCP images in OpenStack by ID
+  # Use ID column; example 71a0ad43-7cc9-406b-88e9-f9b1936802cd ocp-3.9-rhel
+  shell: "{{ openstack }} image delete {{ item.split(' ')[0] }}"
+  # Use each line by the previous command, the line will be "ID Name".
+  with_items: "{{ images_id_name['stdout_lines'] }}"
 
 # Upload the images to Glance.
 - name: Uploading the images to OpenStack
-  shell: "{{ openstack }} image create --disk-format qcow2 --container-format bare --file {{ item['path'] }} ocp-{{ ocp_major_minor }}-{{ ('atomic' in item['path'])|ternary('atomic','rhel') }} --format value -c id"
-  with_items: "{{ images['files'] }}"
+  shell: "{{ openstack }} image create --disk-format qcow2 --container-format bare --file {{ item }} ocp-{{ ocp_major_minor }}-{{ ('atomic' in item)|ternary('atomic','rhel') }} --format value -c id"
+  with_items: "{{ paths }}"
   register: create_result
   # Wait for a successful return code.
   until: create_result['rc'] == 0
@@ -184,8 +196,8 @@
 
 # Add metadata to the OpenStack about the image.
 - name: Adding metadata about the image
-  shell: "{{ openstack }} image set --property file_name={{ item['path']|basename }} --property directory={{ item['path']|dirname }} ocp-{{ ocp_major_minor }}-{{ ('atomic' in item['path'])|ternary('atomic','rhel') }}"
-  with_items: "{{ images['files'] }}"
+  shell: "{{ openstack }} image set --property file_name={{ item|basename }} --property directory={{ item|dirname }} ocp-{{ ocp_major_minor }}-{{ ('atomic' in item)|ternary('atomic','rhel') }}"
+  with_items: "{{ paths }}"
 
 # Create a VM instance with the flavor, image, group, keypair and network.
 - name: Creating a server instance {{ openstack_server_name }}
