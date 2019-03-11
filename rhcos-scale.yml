@@ -6,7 +6,7 @@
 #
 
 - name: Adjust the scale of a RHCOS cluster
-  hosts: rhcos-master[0]
+  hosts: localhost
   gather_facts: false
   remote_user: core
   vars_files:
