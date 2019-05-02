@@ -75,6 +75,16 @@
         oc adm release extract --tools {{ OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE }}
         ls *.tar.gz | xargs -I % sh -c 'tar -xvf %'
         chmod +x openshift-install
+
+     - name: oc location
+       shell: which oc
+       register: oc_location
+
+     - name: replace oc client on the orchestator with the extracted client
+       copy:
+         src: {{ workdir }}/bin/oc
+         dest: {{ oc_location.stdout }}
+         remote_src: yes
   when: not OPENSHIFT_INSTALL_USE_GIT_INSTALLER | default(False)
 
 - name: create openshift install log dir
@@ -102,6 +112,7 @@
       template:
         src: install-config.yaml.j2
         dest: "{{ workdir }}/install-config.yaml"
+
     - name: ignition configs
       shell: "cd {{ workdir }}; OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE={{ OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE }} _OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE={{ OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE }} bin/openshift-install create ignition-configs"
       when: (OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE is defined) and (OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE != "")
